@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="BookFinder.Api/BookFinder.Api.csproj" />
+  <Project Path="BookFinder.Application/BookFinder.Application.csproj" />
+  <Project Path="BookFinder.IntegrationTests/BookFinder.IntegrationTests.csproj" />
+  <Project Path="BookFinder.UnitTests/BookFinder.UnitTests.csproj" />
+  <Project Path="BookFinder.Web/BookFinder.Web.csproj" />
+</Solution>
