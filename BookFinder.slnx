@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="Plan.md" />
+  </Folder>
   <Project Path="BookFinder.Api/BookFinder.Api.csproj" />
   <Project Path="BookFinder.Application/BookFinder.Application.csproj" />
   <Project Path="BookFinder.IntegrationTests/BookFinder.IntegrationTests.csproj" />
