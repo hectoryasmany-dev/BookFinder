@@ -1,8 +1,10 @@
 using System.Text.Json;
 using BookFinder.Application.Common;
+using BookFinder.Application.Configuration;
 using BookFinder.Application.Models;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace BookFinder.Application.Ranking;
 
@@ -17,11 +19,13 @@ public sealed class LlmReRanker : ILlmReRanker
 
     private readonly IChatClient _chatClient;
     private readonly ILogger<LlmReRanker> _logger;
+    private readonly int _timeoutSeconds;
 
-    public LlmReRanker(IChatClient chatClient, ILogger<LlmReRanker> logger)
+    public LlmReRanker(IChatClient chatClient, IOptions<AiProviderOptions> options, ILogger<LlmReRanker> logger)
     {
         _chatClient = chatClient;
         _logger = logger;
+        _timeoutSeconds = options.Value.LlmTimeoutSeconds;
     }
 
     public async Task<Result<IReadOnlyList<string>>> ReRankAsync(
@@ -29,6 +33,9 @@ public sealed class LlmReRanker : ILlmReRanker
         ExtractedHypothesis hypothesis,
         CancellationToken ct = default)
     {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(_timeoutSeconds));
+
         try
         {
             var userPrompt = BuildPrompt(top5, hypothesis);
@@ -45,14 +52,34 @@ public sealed class LlmReRanker : ILlmReRanker
                 ResponseFormat = ChatResponseFormat.Json
             };
 
-            var response = await _chatClient.GetResponseAsync(messages, options, ct);
+            var response = await _chatClient.GetResponseAsync(messages, options, timeout.Token);
             var text = response.Text;
 
             if (string.IsNullOrWhiteSpace(text))
+            {
+                _logger.LogWarning("Re-ranker returned empty response");
+                return Result<IReadOnlyList<string>>.Failure(ResultError.LlmInvalidResponse);
+            }
+
+            using var doc = JsonDocument.Parse(text);
+            var root = doc.RootElement;
+
+            // Gemini may return a bare array or wrap it in an object property
+            JsonElement arrayElement = root.ValueKind == JsonValueKind.Array
+                ? root
+                : root.EnumerateObject()
+                      .FirstOrDefault(p => p.Value.ValueKind == JsonValueKind.Array)
+                      .Value;
+
+            if (arrayElement.ValueKind != JsonValueKind.Array)
                 return Result<IReadOnlyList<string>>.Failure(ResultError.LlmInvalidResponse);
 
-            var ids = JsonSerializer.Deserialize<List<string>>(text);
-            if (ids is null || ids.Count == 0)
+            var ids = arrayElement.EnumerateArray()
+                .Select(e => e.GetString() ?? string.Empty)
+                .Where(s => s.Length > 0)
+                .ToList();
+
+            if (ids.Count == 0)
                 return Result<IReadOnlyList<string>>.Failure(ResultError.LlmInvalidResponse);
 
             var validKeys = top5.Select(c => c.Work.WorkKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -60,9 +87,14 @@ public sealed class LlmReRanker : ILlmReRanker
 
             return Result<IReadOnlyList<string>>.Success(filtered);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             throw;
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("LLM re-ranking timed out after {Timeout}s; keeping original order", _timeoutSeconds);
+            return Result<IReadOnlyList<string>>.Failure(ResultError.LlmUnavailable);
         }
         catch (Exception ex)
         {

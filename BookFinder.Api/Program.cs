@@ -47,6 +47,18 @@ try
     builder.Services.Configure<AiProviderOptions>(builder.Configuration.GetSection("AI"));
     builder.Services.Configure<FeaturesOptions>(builder.Configuration.GetSection("Features"));
 
+    // --- CORS ---
+    // AllowedOrigins is read from config so it can be updated per environment without code changes.
+    // In Docker, appsettings.Production.json should include the public web origin.
+    var allowedOrigins = builder.Configuration
+        .GetSection("Cors:AllowedOrigins")
+        .Get<string[]>() ?? [];
+
+    builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
+        p.WithOrigins(allowedOrigins)
+         .AllowAnyHeader()
+         .AllowAnyMethod()));
+
     // --- Controllers + ProblemDetails ---
     builder.Services.AddControllers();
     builder.Services.AddProblemDetails();
@@ -196,6 +208,7 @@ try
 
     app.UseSerilogRequestLogging();
     app.UseHttpsRedirection();
+    app.UseCors();
     app.UseOutputCache();
     app.UseRateLimiter();
     app.UseAuthorization();

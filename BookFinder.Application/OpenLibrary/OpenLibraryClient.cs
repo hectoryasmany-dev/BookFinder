@@ -133,20 +133,29 @@ public sealed class OpenLibraryClient : IOpenLibraryClient
             var authorId = ExtractId(entry.Author.Key);
             if (string.IsNullOrEmpty(authorId)) continue;
 
-            try
+            // Cache individual author lookups — the same author key appears across multiple works
+            // Without this, each work pays its own HTTP cost.
+            var authorCacheKey = $"author:{authorId}";
+            if (!_cache.TryGetValue(authorCacheKey, out OlAuthorDetail? authorDetail))
             {
-                var authorDetail = await _http.GetFromJsonAsync<OlAuthorDetail>($"/authors/{authorId}.json", ct);
-                if (authorDetail is not null)
+                try
                 {
-                    result.Add(new OpenLibraryAuthor(
-                        AuthorKey: entry.Author.Key,
-                        Name: authorDetail.Name,
-                        IsPrimaryAuthor: isPrimary && string.IsNullOrEmpty(entry.Role)));
-                    isPrimary = false;
+                    authorDetail = await _http.GetFromJsonAsync<OlAuthorDetail>($"/authors/{authorId}.json", ct);
+                    if (authorDetail is not null)
+                        _cache.Set(authorCacheKey, authorDetail, TimeSpan.FromMinutes(_options.CacheMinutes));
                 }
+                catch (OperationCanceledException) { throw; }
+                catch { /* skip this author */ }
             }
-            catch (OperationCanceledException) { throw; }
-            catch { /* skip this author */ }
+
+            if (authorDetail is not null)
+            {
+                result.Add(new OpenLibraryAuthor(
+                    AuthorKey: entry.Author.Key,
+                    Name: authorDetail.Name,
+                    IsPrimaryAuthor: isPrimary && string.IsNullOrEmpty(entry.Role)));
+                isPrimary = false;
+            }
         }
 
         return result;

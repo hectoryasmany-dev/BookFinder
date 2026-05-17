@@ -92,8 +92,12 @@ public sealed class SearchPipeline : ISearchPipeline
 
         if (extractResult.IsSuccess)
         {
-            _logger.LogInformation("Stage llm_extract completed in {Ms}ms", sw.ElapsedMilliseconds);
-            return extractResult.Value!;
+            var h = extractResult.Value!;
+            _logger.LogInformation(
+                "Stage llm_extract completed in {Ms}ms → title={Title} author={Author} year={Year} keywords=[{Keywords}]",
+                sw.ElapsedMilliseconds, h.Title ?? "null", h.Author ?? "null", h.Year?.ToString() ?? "null",
+                string.Join(", ", h.Keywords));
+            return h;
         }
 
         _logger.LogWarning("LLM extraction failed ({Code}); falling back to normalized query in {Ms}ms",

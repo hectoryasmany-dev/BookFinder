@@ -1,8 +1,10 @@
 using System.Text.Json;
 using BookFinder.Application.Common;
+using BookFinder.Application.Configuration;
 using BookFinder.Application.Models;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace BookFinder.Application.Extraction;
 
@@ -31,15 +33,23 @@ public sealed class LlmExtractor : ILlmExtractor
 
     private readonly IChatClient _chatClient;
     private readonly ILogger<LlmExtractor> _logger;
+    private readonly int _timeoutSeconds;
 
-    public LlmExtractor(IChatClient chatClient, ILogger<LlmExtractor> logger)
+    public LlmExtractor(IChatClient chatClient, IOptions<AiProviderOptions> options, ILogger<LlmExtractor> logger)
     {
         _chatClient = chatClient;
         _logger = logger;
+        _timeoutSeconds = options.Value.LlmTimeoutSeconds;
     }
 
     public async Task<Result<ExtractedHypothesis>> ExtractAsync(string blob, CancellationToken ct = default)
     {
+        // Hard cap: if the LLM doesn't respond within the configured timeout, fall back
+        // to normalized-query matching. Configurable via AI:LlmTimeoutSeconds in appsettings.
+        // Free-tier Gemini may queue for up to 45s;Protects also from the controller timing out and getting 500 error
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(_timeoutSeconds));
+
         try
         {
             var messages = new List<ChatMessage>
@@ -50,11 +60,11 @@ public sealed class LlmExtractor : ILlmExtractor
 
             var options = new ChatOptions
             {
-                Temperature = 0.5f,
+                Temperature = 0.1f,
                 ResponseFormat = ChatResponseFormat.Json
             };
 
-            var response = await _chatClient.GetResponseAsync(messages, options, ct);
+            var response = await _chatClient.GetResponseAsync(messages, options, timeout.Token);
             var text = response.Text;
 
             if (string.IsNullOrWhiteSpace(text))
@@ -81,9 +91,16 @@ public sealed class LlmExtractor : ILlmExtractor
 
             return new ExtractedHypothesis(title, author, keywords, year);
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // Request was cancelled by the caller (e.g. user closed browser) — propagate
+            throw;
+        }
         catch (OperationCanceledException)
         {
-            throw;
+            
+            _logger.LogWarning("LLM extraction timed out after {Timeout}s; falling back to normalized query", _timeoutSeconds);
+            return ResultError.LlmUnavailable;
         }
         catch (JsonException ex)
         {
