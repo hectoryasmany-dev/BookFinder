@@ -9,6 +9,8 @@ RUN dotnet publish BookFinder.Web/BookFinder.Web.csproj -c Release -o /app/publi
 
 FROM nginx:alpine AS final
 COPY --from=build /app/publish/wwwroot /usr/share/nginx/html
+# Bake the Railway static-only config into the image.
+# Docker Compose overrides this at runtime via a volume mount (see docker-compose.yml).
 COPY BookFinder.Web/nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80

@@ -200,11 +200,8 @@ try
     app.UseExceptionHandler();
     app.UseStatusCodePages();
 
-    if (app.Environment.IsDevelopment())
-    {
-        app.UseSwagger();
-        app.UseSwaggerUI(o => o.SwaggerEndpoint("/swagger/v1/swagger.json", "BookFinder v1"));
-    }
+    app.UseSwagger();
+    app.UseSwaggerUI(o => o.SwaggerEndpoint("/swagger/v1/swagger.json", "BookFinder v1"));
 
     app.UseSerilogRequestLogging();
     app.UseHttpsRedirection();
