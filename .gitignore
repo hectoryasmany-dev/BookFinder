@@ -363,3 +363,5 @@ MigrationBackup/
 FodyWeavers.xsd
 /Plan.md
 /.github/copilot-instructions.md
+/.claude/settings.local.json
+/.env
