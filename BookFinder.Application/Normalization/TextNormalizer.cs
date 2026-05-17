@@ -7,55 +7,96 @@ namespace BookFinder.Application.Normalization;
 
 public sealed class TextNormalizer
 {
-    private static readonly HashSet<string> LeadingArticles =
-        new(StringComparer.OrdinalIgnoreCase) { "the", "a", "an" };
+    private static readonly string[] LeadingArticles = ["the", "a", "an"];
 
+    // Matches ": subtitle" or " — subtitle" (em-dash)
     private static readonly Regex SubtitlePattern =
-        new(@"\s*(:|—|-{2})\s+.*$", RegexOptions.Compiled);
+        new(@"(\s*:|\s+—)\s*.*$", RegexOptions.Compiled);
 
-    private static readonly Regex CollapseWhitespace =
+    private static readonly Regex WhitespacePattern =
         new(@"\s+", RegexOptions.Compiled);
 
+    /// <summary>
+    /// Normalizes raw input into a NormalizedQuery (no subtitle strip, no article strip).
+    /// </summary>
     public NormalizedQuery Normalize(string raw)
     {
-        var normalized = NormalizeCore(raw);
+        ArgumentNullException.ThrowIfNull(raw);
+        var normalized = ApplyCore(raw, stripSubtitle: false);
         var tokens = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         return new NormalizedQuery(raw, normalized, tokens);
     }
 
-    public string NormalizeTitle(string title, bool stripSubtitle = true)
+    /// <summary>
+    /// Normalizes a title for exact/fuzzy comparison (strips subtitle + leading article).
+    /// </summary>
+    public string NormalizeTitle(string title)
     {
-        var s = title;
+        ArgumentNullException.ThrowIfNull(title);
+        var core = ApplyCore(title, stripSubtitle: true);
+        return StripLeadingArticle(core);
+    }
+
+    /// <summary>
+    /// Normalizes an author name for comparison (lowercase + diacritics only).
+    /// </summary>
+    public string NormalizeAuthor(string author)
+    {
+        ArgumentNullException.ThrowIfNull(author);
+        var lower = author.ToLowerInvariant();
+        var stripped = StripDiacritics(lower);
+        return WhitespacePattern.Replace(stripped.Trim(), " ");
+    }
+
+    /// <summary>
+    /// Returns true if workAuthor contains hypothesisAuthor or vice-versa
+    /// (handles "J.R.R. Tolkien" matching "Tolkien").
+    /// </summary>
+    public bool AuthorMatches(string workAuthorName, string hypothesisAuthor)
+    {
+        var normWork = NormalizeAuthor(workAuthorName);
+        var normHypo = NormalizeAuthor(hypothesisAuthor);
+
+        // All tokens from the shorter (hypothesis) side must appear in the work author name.
+        // "tolkien" → matches "j r r tolkien" ✓
+        // "s"       → does NOT match "dickens" ✓
+        var hypTokens = normHypo.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var workTokens = normWork.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        return hypTokens.All(t => workTokens.Contains(t))
+            || workTokens.All(t => hypTokens.Contains(t));
+    }
+
+    private static string ApplyCore(string text, bool stripSubtitle)
+    {
+        var result = text.ToLowerInvariant();
+        result = StripDiacritics(result);
         if (stripSubtitle)
-            s = SubtitlePattern.Replace(s, string.Empty);
-        s = NormalizeCore(s);
-        s = StripLeadingArticle(s);
-        return s;
+            result = SubtitlePattern.Replace(result, string.Empty);
+        result = WhitespacePattern.Replace(result.Trim(), " ");
+        return result;
     }
 
-    public string NormalizeAuthor(string author) => NormalizeCore(author);
-
-    private static string NormalizeCore(string input)
-    {
-        var decomposed = input.Normalize(NormalizationForm.FormD);
-        var stripped = new StringBuilder(decomposed.Length);
-        foreach (var ch in decomposed)
-        {
-            if (CharUnicodeInfo.GetUnicodeCategory(ch) != UnicodeCategory.NonSpacingMark)
-                stripped.Append(ch);
-        }
-
-        var lower = stripped.ToString().ToLowerInvariant();
-        return CollapseWhitespace.Replace(lower.Trim(), " ");
-    }
-
-    private static string StripLeadingArticle(string s)
+    private static string StripLeadingArticle(string text)
     {
         foreach (var article in LeadingArticles)
         {
-            if (s.StartsWith(article + " ", StringComparison.Ordinal))
-                return s[(article.Length + 1)..];
+            if (text.StartsWith(article + " ", StringComparison.Ordinal))
+                return text[(article.Length + 1)..];
         }
-        return s;
+        return text;
     }
+
+    private static string StripDiacritics(string text)
+    {
+        var formD = text.Normalize(NormalizationForm.FormD);
+        var sb = new StringBuilder(formD.Length);
+        foreach (var c in formD)
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
+                sb.Append(c);
+        }
+        return sb.ToString().Normalize(NormalizationForm.FormC);
+    }
+
 }
