@@ -1,6 +1,10 @@
 using BookFinder.Application.Configuration;
+using BookFinder.Application.Explanation;
 using BookFinder.Application.Extraction;
+using BookFinder.Application.Matching;
+using BookFinder.Application.Normalization;
 using BookFinder.Application.OpenLibrary;
+using BookFinder.Application.Pipeline;
 using BookFinder.Application.Ranking;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Http.Resilience;
@@ -63,7 +67,17 @@ builder.Services.AddSingleton<IChatClient>(sp =>
     };
 });
 
+builder.Services.AddSingleton<TextNormalizer>();
+builder.Services.AddSingleton<Deduplicator>();
+builder.Services.AddSingleton<ExplanationBuilder>();
+builder.Services.AddSingleton<IMatchRule, Tier1ExactTitlePrimaryAuthorRule>();
+builder.Services.AddSingleton<IMatchRule, Tier2ExactTitleContributorRule>();
+builder.Services.AddSingleton<IMatchRule, Tier3NearMatchTitleAuthorRule>();
+builder.Services.AddSingleton<IMatchRule, Tier4AuthorOnlyRule>();
+builder.Services.AddSingleton<IMatchRule, Tier5NoWinnerRule>();
+builder.Services.AddSingleton<MatchingHierarchy>();
 builder.Services.AddSingleton<ILlmExtractor, LlmExtractor>();
+builder.Services.AddSingleton<ISearchPipeline, SearchPipeline>();
 
 var features = builder.Configuration.GetSection("Features:LlmReRanking").Get<LlmReRankingOptions>()
     ?? new LlmReRankingOptions();
