@@ -1,4 +1,4 @@
-﻿services:
+services:
   bookfinder-api:
     build:
       context: .
@@ -10,7 +10,7 @@
       AI__GeminiApiKey: ${GEMINI_API_KEY}
       AI__GeminiModel: ${GEMINI_MODEL:-gemini-2.5-flash}
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health/live || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health/live || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
