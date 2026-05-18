@@ -20,11 +20,8 @@ services:
     build:
       context: .
       dockerfile: BookFinder.Web/Dockerfile
-    # Mount the Docker Compose-specific nginx config at runtime,
-    # overriding the Railway static config baked into the image.
-    # :ro = read-only, nginx does not need to write to this file.
     volumes:
-      - ./BookFinder.Web/nginx.compose.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./BookFinder.Web/nginx.compose.conf:/etc/nginx/conf.d/default.conf
     ports:
       - "80:80"
     depends_on:
