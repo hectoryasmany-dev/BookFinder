@@ -15,7 +15,7 @@ public sealed class ExplanationBuilder
         {
             MatchTier.Tier1ExactTitlePrimaryAuthor => BuildTier1(primaryAuthor),
             MatchTier.Tier2ExactTitleContributor   => BuildTier2(primaryAuthor, match),
-            MatchTier.Tier3NearMatchTitleAuthor    => BuildTier3(primaryAuthor, match),
+            MatchTier.Tier3NearMatchTitleAuthor    => BuildTier3(primaryAuthor, match, hypothesis),
             MatchTier.Tier4AuthorOnly              => BuildTier4(primaryAuthor),
             _                                      => BuildTier5(work, hypothesis)
         };
@@ -39,12 +39,18 @@ public sealed class ExplanationBuilder
         return string.Join("; ", parts) + ".";
     }
 
-    private static string BuildTier3(string? primaryAuthor, MatchDetails match)
+    private static string BuildTier3(string? primaryAuthor, MatchDetails match, ExtractedHypothesis hypothesis)
     {
         var score = match.SimilarityScore.HasValue
             ? $" (Jaro-Winkler {match.SimilarityScore.Value:F2})"
             : string.Empty;
-        var parts = new List<string> { $"Near-match title{score}" };
+
+        // Distinguish keyword-assisted match from a full title near-match
+        var matchLabel = hypothesis.Title is null
+            ? $"Keyword-assisted title match{score}"
+            : $"Near-match title{score}";
+
+        var parts = new List<string> { matchLabel };
         if (primaryAuthor is not null)
             parts.Add($"{primaryAuthor} primary author");
         return string.Join("; ", parts) + ".";

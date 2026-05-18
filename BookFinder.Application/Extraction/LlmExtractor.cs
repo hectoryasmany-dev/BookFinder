@@ -17,12 +17,20 @@ public sealed class LlmExtractor : ILlmExtractor
         Return ONLY valid JSON with keys: title (string|null), author (string|null), keywords (string[]), year (int|null).
         No markdown, no explanation.
 
+        Rules:
+        - If you can infer the title from the input (even from a misspelled keyword), always populate "title".
+        - Only use "keywords" for descriptors that are NOT part of the title (e.g. "illustrated", "deluxe").
+        - A single token that is a well-known author surname should go in "author", not "keywords".
+
         Examples:
         Input: "tolkien hobbit illustrated deluxe 1937"
         Output: {"title":"The Hobbit","author":"J.R.R. Tolkien","keywords":["illustrated","deluxe"],"year":1937}
 
         Input: "mark huckleberry"
         Output: {"title":null,"author":"Mark Twain","keywords":["huckleberry"],"year":null}
+
+        Input: "huckelberry"
+        Output: {"title":"Adventures of Huckleberry Finn","author":"Mark Twain","keywords":[],"year":null}
 
         Input: "dickens, tale two cities"
         Output: {"title":"A Tale of Two Cities","author":"Charles Dickens","keywords":[],"year":null}
@@ -106,6 +114,12 @@ public sealed class LlmExtractor : ILlmExtractor
         {
             _logger.LogWarning(ex, "LLM returned unparsable JSON");
             return ResultError.LlmInvalidResponse;
+        }
+        catch (Exception ex) when (ex.Message.Contains("API key") || ex.Message.Contains("leaked") || ex.Message.Contains("401"))
+        {
+            // Invalid or revoked key — log as Error so it surfaces clearly in logs
+            _logger.LogError(ex, "LLM call rejected: API key is invalid or revoked. Set a valid key via user-secrets (AI:GeminiApiKey).");
+            return ResultError.LlmUnavailable;
         }
         catch (Exception ex)
         {

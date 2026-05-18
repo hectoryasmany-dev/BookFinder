@@ -181,6 +181,7 @@ try
     builder.Services.AddSingleton<IMatchRule, Tier1ExactTitlePrimaryAuthorRule>();
     builder.Services.AddSingleton<IMatchRule, Tier2ExactTitleContributorRule>();
     builder.Services.AddSingleton<IMatchRule, Tier3NearMatchTitleAuthorRule>();
+    builder.Services.AddSingleton<IMatchRule, Tier3KeywordTitleAuthorRule>(); // backstop: keyword-as-title near-match
     builder.Services.AddSingleton<IMatchRule, Tier4AuthorOnlyRule>();
     builder.Services.AddSingleton<IMatchRule, Tier5NoWinnerRule>();
     builder.Services.AddSingleton<MatchingHierarchy>();

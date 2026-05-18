@@ -1,4 +1,4 @@
-﻿# BookFinder
+# BookFinder
 
 A .NET 8 book-search application that accepts free-text queries ("tolkien hobbit illustrated deluxe 1937") and returns up to five ranked candidates from the [Open Library](https://openlibrary.org) catalogue.
 
@@ -336,3 +336,19 @@ Spin up the full ASP.NET Core pipeline via `WebApplicationFactory<Program>`. `IL
 - [x] Serilog structured logging with per-stage timings
 - [x] Docker multi-stage builds + nginx reverse proxy
 - [x] 52 tests (43 unit + 9 integration)
+
+---
+
+## 13. Future Improvements
+
+**Adaptive Matching via Relevance Feedback** — Let users mark "this was it" or "none of these" to gradually re-weight the matching hierarchy, producing a labelled dataset and a system that measurably improves with use.
+
+**Semantic Search via Embeddings** — Replace Jaro-Winkler fuzzy matching with cosine similarity over Gemini `gemini-2.5-flash` embeddings, making conceptual queries like *"dystopian pig farm allegory"* resolve correctly where character-level matching cannot.
+
+**Personal Library & Reading Lists** — Let users curate *want to read / already read* lists via `localStorage` (or a lightweight SQL backend for cross-device sync), laying the data foundation for future collaborative filtering.
+
+**Resilience Policies with Polly** — Wrap the Open Library `HttpClient` with `AddResilienceHandler` (Polly v8) for exponential back-off retries, a circuit breaker, and a timeout policy — production-grade HTTP hygiene in ~10 lines of DI config.
+
+**.NET Aspire Orchestration** — Replace `docker-compose.yml` with an Aspire AppHost for automatic service discovery, a built-in OpenTelemetry dashboard, and a clear one-command path to Azure Container Apps deployment.
+
+**Distributed Tracing with OpenTelemetry** — Replace per-stage Serilog timing logs with `Activity` spans so the full pipeline trace — extract → search → enrich → match — is queryable in any OTLP-compatible backend such as Jaeger or Azure Monitor.
